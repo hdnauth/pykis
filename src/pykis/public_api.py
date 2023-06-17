@@ -25,6 +25,7 @@ from .domain_info import DomainInfo
 from .access_token import AccessToken
 from .utility import *  # pylint: disable = wildcard-import, unused-wildcard-import
 from .market_code_map import MarketCodeMap
+from datetime import datetime, timedelta
 
 
 class Api:  # pylint: disable=too-many-public-methods
@@ -122,6 +123,19 @@ class Api:  # pylint: disable=too-many-public-methods
         price = info["stck_prpr"]
 
         return int(price)
+    
+    def get_kr_current_askbid(self, ticker: str) -> int:
+        """
+        국내 주식 현재가를 반환한다.
+        ticker: 종목코드
+        return: 해당 종목 현재가 (단위: 원)
+        """
+        info = self._get_kr_stock_askbid_price_info(ticker)
+        price = int(info.outputs[1]["stck_prpr"])
+        askprice = int(info.outputs[0]["askp1"])
+        bidprice = int(info.outputs[0]["bidp1"])
+
+        return price, askprice, bidprice
 
     def get_kr_max_price(self, ticker: str) -> int:
         """
@@ -164,6 +178,25 @@ class Api:  # pylint: disable=too-many-public-methods
         res = self._send_get_request(req)
         return res.outputs[0]
 
+    def _get_kr_stock_askbid_price_info(self, ticker: str) -> Json:
+        """
+        국내 주식 매수/매도 호가 정보를 반환한다.
+        ticker: 종목코드
+        return: 해당 종목 현재 시세 정보
+        """
+        url_path = "/uapi/domestic-stock/v1/quotations/inquire-asking-price-exp-ccn"
+
+        tr_id = "FHKST01010200"
+
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": ticker
+        }
+
+        req = APIRequestParameter(url_path, tr_id, params)
+        res = self._send_get_request(req)
+        return res
+    
     def _get_kr_history(self, ticker: str, time_unit: str = "D") -> APIResponse:
         """
         해당 종목코드의 과거 가격 조회한다.
@@ -187,6 +220,31 @@ class Api:  # pylint: disable=too-many-public-methods
             "FID_INPUT_ISCD": ticker,
             "FID_PERIOD_DIV_CODE": time_unit,
             "FID_ORG_ADJ_PRC": "0000000001"
+        }
+
+        req = APIRequestParameter(url_path, tr_id, params)
+
+        return self._send_get_request(req, raise_flag=False)
+    
+    def _get_kr_history_period(self, ticker: str, startD: str, endD: str) -> APIResponse:
+        """
+        해당 종목코드의 과거 가격 조회한다.
+        ticker: 종목 코드
+        time_unit: 기간 분류 코드 (d/day-일, w/week-주, m/month-월)
+        startD: 시작날짜 ex.20220101
+        endD: 끝날짜 ex.20220131
+        """
+        time_unit = 'D'
+        url_path = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
+        tr_id = "FHKST03010100"
+
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": ticker,
+            "FID_INPUT_DATE_1": startD,
+            "FID_INPUT_DATE_2": endD,
+            "FID_PERIOD_DIV_CODE": time_unit,
+            "FID_ORG_ADJ_PRC": "0000000000" # 0:수정주가 1:원주가
         }
 
         req = APIRequestParameter(url_path, tr_id, params)
@@ -223,6 +281,20 @@ class Api:  # pylint: disable=too-many-public-methods
         data.set_index("Date", inplace=True)
 
         return data
+    
+    def get_kr_ohlcv_period(self, ticker: str, period: int):
+        """
+        해당 종목코드의 과거 가격 정보를 반환한다.
+        ticker: 종목 코드
+        최근 100 (최대 기간) 일/주/월 데이터를 읽어오기 위해 시작날짜를 200일 전으로 고정함
+        """
+        now = datetime.now()
+        before_200 = now - timedelta(days=200)
+        str_today = now.strftime("%Y%m%d")
+        str_before_200 = before_200.strftime("%Y%m%d")
+
+        res = self._get_kr_history_period(ticker, str_before_200, str_today)
+        return res.outputs[1][0:period]
 
     def _get_os_stock_current_price_info(self, ticker: str, market_code: str) -> Json:
         """
@@ -593,7 +665,7 @@ class Api:  # pylint: disable=too-many-public-methods
         """
         국내 주식 매매(현금)
         """
-        order_type = "00"  # 00: 지정가, 01: 시장가, ...
+        order_type = "11"  # 00: 지정가, 01: 시장가, ... 11 : IOC지정가
         if price <= 0:
             price = 0
             order_type = "01"   # 시장가
