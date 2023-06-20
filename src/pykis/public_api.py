@@ -388,6 +388,16 @@ class Api:  # pylint: disable=too-many-public-methods
             return self._get_kr_total_balance(*args, **kwargs)
 
         return send_continuous_query(request_function, to_dataframe)
+    
+    def get_stock_balance_raw(self, reg) -> pd.DataFrame:
+        """
+        주식 잔고 조회
+        """
+        if reg == 'kr':
+            res = self._get_kr_total_balance()
+        else:
+            res = self._get_os_total_balance()
+        return res
 
     def get_kr_deposit(self) -> int:
         """
