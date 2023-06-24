@@ -26,6 +26,7 @@ from .access_token import AccessToken
 from .utility import *  # pylint: disable = wildcard-import, unused-wildcard-import
 from .market_code_map import MarketCodeMap
 from datetime import datetime, timedelta
+from pytz import timezone
 
 
 class Api:  # pylint: disable=too-many-public-methods
@@ -124,18 +125,44 @@ class Api:  # pylint: disable=too-many-public-methods
 
         return int(price)
     
-    def get_kr_current_askbid(self, ticker: str) -> int:
+    def get_kr_current_askbid(self, ticker: str):
         """
-        국내 주식 현재가를 반환한다.
+        국내 주식 매수/매도 호가 정보를 반환한다.
         ticker: 종목코드
-        return: 해당 종목 현재가 (단위: 원)
+        return: 해당 종목 현재 시세 정보
         """
-        info = self._get_kr_stock_askbid_price_info(ticker)
-        price = int(info.outputs[1]["stck_prpr"])
-        askprice = int(info.outputs[0]["askp1"])
-        bidprice = int(info.outputs[0]["bidp1"])
-
+        url_path = "/uapi/domestic-stock/v1/quotations/inquire-asking-price-exp-ccn"
+        tr_id = "FHKST01010200"
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": ticker
+        }
+        req = APIRequestParameter(url_path, tr_id, params)
+        res = self._send_get_request(req)
+        price = int(res.outputs[1]["stck_prpr"])
+        askprice = int(res.outputs[0]["askp1"])
+        bidprice = int(res.outputs[0]["bidp1"])
         return price, askprice, bidprice
+
+    def get_os_current_askbid(self, market_code: str, ticker: str):
+        """
+        미국 주식 현재가 정보를 반환한다.
+        ticker: 종목코드
+        return: 해당 종목 현재 시세 정보
+        """
+        url_path = "/uapi/overseas-price/v1/quotations/price"
+        tr_id = "HHDFS00000300"
+        params = {
+            "AUTH": "",
+            "EXCD": market_code,
+            "SYMB": ticker
+        }
+
+        req = APIRequestParameter(url_path, tr_id, params)
+        res = self._send_get_request(req)
+        price = float(res.outputs[0]['last'])
+        return price, price, price
+
 
     def get_kr_max_price(self, ticker: str) -> int:
         """
@@ -177,25 +204,6 @@ class Api:  # pylint: disable=too-many-public-methods
         req = APIRequestParameter(url_path, tr_id, params)
         res = self._send_get_request(req)
         return res.outputs[0]
-
-    def _get_kr_stock_askbid_price_info(self, ticker: str) -> Json:
-        """
-        국내 주식 매수/매도 호가 정보를 반환한다.
-        ticker: 종목코드
-        return: 해당 종목 현재 시세 정보
-        """
-        url_path = "/uapi/domestic-stock/v1/quotations/inquire-asking-price-exp-ccn"
-
-        tr_id = "FHKST01010200"
-
-        params = {
-            "FID_COND_MRKT_DIV_CODE": "J",
-            "FID_INPUT_ISCD": ticker
-        }
-
-        req = APIRequestParameter(url_path, tr_id, params)
-        res = self._send_get_request(req)
-        return res
     
     def _get_kr_history(self, ticker: str, time_unit: str = "D") -> APIResponse:
         """
@@ -237,7 +245,6 @@ class Api:  # pylint: disable=too-many-public-methods
         time_unit = 'D'
         url_path = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
         tr_id = "FHKST03010100"
-
         params = {
             "FID_COND_MRKT_DIV_CODE": "J",
             "FID_INPUT_ISCD": ticker,
@@ -246,9 +253,30 @@ class Api:  # pylint: disable=too-many-public-methods
             "FID_PERIOD_DIV_CODE": time_unit,
             "FID_ORG_ADJ_PRC": "0000000000" # 0:수정주가 1:원주가
         }
-
         req = APIRequestParameter(url_path, tr_id, params)
+        return self._send_get_request(req, raise_flag=False)
 
+    def _get_os_history_period(self, market_code: str, ticker: str, startD: str, endD: str) -> APIResponse:
+        """
+        해당 종목코드의 과거 가격 조회한다.
+        ticker: 종목 코드
+        time_unit: 기간 분류 코드 (d/day-일, w/week-주, m/month-월)
+        startD: 시작날짜 ex.20220101
+        endD: 끝날짜 ex.20220131
+        """
+        time_unit = 'D'
+        url_path = "/uapi/overseas-price/v1/quotations/dailyprice"
+        tr_id = "HHDFS76240000"
+        params = {
+            "AUTH": "",
+            "EXCD": market_code,
+            "SYMB": ticker,
+            "GUBN": '0',
+            "BYMD": '',
+            "MODP": '1',
+            "KEYB": ''
+        }
+        req = APIRequestParameter(url_path, tr_id, params)
         return self._send_get_request(req, raise_flag=False)
 
     def get_kr_ohlcv(self, ticker: str, time_unit: str = "D") -> pd.DataFrame:
@@ -282,7 +310,27 @@ class Api:  # pylint: disable=too-many-public-methods
 
         return data
     
-    def get_kr_ohlcv_period(self, ticker: str, period: int):
+    def get_ohlcv_period(self, ticker: str, period: int, reg: str, market_code: str):
+        """
+        해당 종목코드의 과거 가격 정보를 반환한다.
+        ticker: 종목 코드
+        최근 100 (최대 기간) 일/주/월 데이터를 읽어오기 위해 시작날짜를 200일 전으로 고정함
+        """
+        if reg == 'us':
+            now = datetime.now(timezone('America/New_York'))
+        else:
+            now = datetime.now(timezone('Asia/Seoul'))
+        before_200 = now - timedelta(days=200)
+        str_today = now.strftime("%Y%m%d")
+        str_before_200 = before_200.strftime("%Y%m%d")
+
+        if reg == 'us':
+            res = self._get_os_history_period(market_code, ticker, str_before_200, str_today)
+        else:
+            res = self._get_kr_history_period(ticker, str_before_200, str_today)
+        return res.outputs[1][0:period]
+
+    def get_os_ohlcv_period(self, ticker: str, period: int):
         """
         해당 종목코드의 과거 가격 정보를 반환한다.
         ticker: 종목 코드
@@ -339,7 +387,7 @@ class Api:  # pylint: disable=too-many-public-methods
         구매 가능 현금(원화) 조회
         return: 해당 계좌의 구매 가능한 현금(원화)
         """
-        url_path = "/uapi/domestic-stock/v1/trading/inquire-daily-ccld"
+        url_path = "/uapi/domestic-stock/v1/trading/inquire-psbl-order"
         tr_id = "TTTC8908R"
 
         if self.account is None:
@@ -364,6 +412,32 @@ class Api:  # pylint: disable=too-many-public-methods
         output = res.outputs[0]
         return int(output["ord_psbl_cash"])
 
+    def get_os_buyable_cash(self, type) -> int:
+        url_path = "/uapi/overseas-stock/v1/trading/inquire-present-balance"
+        tr_id = "CTRP6504R"
+
+        if self.account is None:
+            msg = "계좌가 설정되지 않았습니다. set_account를 통해 계좌 정보를 설정해주세요."
+            raise RuntimeError(msg)
+
+        if type == 2:
+            INQR_DVSN_CD = '02'
+        else:
+            INQR_DVSN_CD = '01'
+
+        params = {
+            "CANO": self.account.account_code,
+            "ACNT_PRDT_CD": self.account.product_code,
+            "WCRC_FRCR_DVSN_CD": '02',
+            "NATN_CD": '840',
+            "TR_MKET_CD": "00", # 00: 전체 01: 나스닥(NASD) 02: 뉴욕거래소(NYSE)
+            "INQR_DVSN_CD": INQR_DVSN_CD
+        }
+
+        req = APIRequestParameter(url_path, tr_id, params)
+        res = self._send_get_request(req)
+        return float(res.outputs[1][0]['frcr_drwg_psbl_amt_1'])
+    
     def get_kr_stock_balance(self) -> pd.DataFrame:
         """
         국내 주식 잔고 조회
@@ -389,14 +463,14 @@ class Api:  # pylint: disable=too-many-public-methods
 
         return send_continuous_query(request_function, to_dataframe)
     
-    def get_stock_balance_raw(self, reg) -> pd.DataFrame:
+    def get_stock_balance_raw(self, reg, market_code) -> pd.DataFrame:
         """
         주식 잔고 조회
         """
-        if reg == 'kr':
-            res = self._get_kr_total_balance()
+        if reg == 'us':
+            res = self._get_os_total_balance(market_code)
         else:
-            res = self._get_os_total_balance()
+            res = self._get_kr_total_balance()
         return res
 
     def get_kr_deposit(self) -> int:
