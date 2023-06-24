@@ -47,7 +47,7 @@ def get_currency_code_from_market_code(market_code: str) -> str:
     거래소 코드를 입력 받아서 거래통화코드를 반환한다
     """
     market_code = market_code.upper()
-    if market_code in ["NASD", "NAS", "NYSE", "AMEX", "AMS"]:
+    if market_code in ["NASD", "NAS", "NYSE", "NYS", "AMEX", "AMS"]:
         return "USD"
     if market_code in ["SEHK", "HKS"]:
         return "HKD"
