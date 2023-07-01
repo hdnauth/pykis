@@ -382,6 +382,28 @@ class Api:  # pylint: disable=too-many-public-methods
     # 시세 조회------------
 
     # 잔고 조회------------
+    def get_invest_status(self):
+        """
+        투자계좌자산현황조회 조회
+        """
+        url_path = "/uapi/domestic-stock/v1/trading/inquire-account-balance"
+        tr_id = "CTRP6548R"
+
+        if self.account is None:
+            msg = "계좌가 설정되지 않았습니다. set_account를 통해 계좌 정보를 설정해주세요."
+            raise RuntimeError(msg)
+
+        params = {
+            "CANO": self.account.account_code,
+            "ACNT_PRDT_CD": self.account.product_code,
+            "INQR_DVSN_1": "",
+            "BSPR_BF_DT_APLY_YN": ""
+        }
+
+        req = APIRequestParameter(url_path, tr_id, params)
+        res = self._send_get_request(req)
+        return res
+
     def get_kr_buyable_cash(self) -> int:
         """
         구매 가능 현금(원화) 조회
