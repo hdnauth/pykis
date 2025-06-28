@@ -552,7 +552,7 @@ class Api:  # pylint: disable=too-many-public-methods
             tr_id = "TTTC8434R"
         else:
             url_path = "/uapi/overseas-stock/v1/trading/inquire-balance"
-            tr_id = "JTTT3012R"
+            tr_id = "TTTS3012R"
 
         extra_header = none_to_empty_dict(extra_header)
         extra_param = none_to_empty_dict(extra_param)
@@ -618,7 +618,7 @@ class Api:  # pylint: disable=too-many-public-methods
         한번만 실행.
         """
         url_path = "/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl"
-        tr_id = "TTTC8036R"
+        tr_id = "TTTC0084R"
 
         extra_header = none_to_empty_dict(extra_header)
         extra_param = none_to_empty_dict(extra_param)
@@ -649,7 +649,7 @@ class Api:  # pylint: disable=too-many-public-methods
         한번만 실행.
         """
         url_path = "/uapi/overseas-stock/v1/trading/inquire-nccs"
-        tr_id = "JTTT3018R"
+        tr_id = "TTTS3018R"
 
         extra_header = none_to_empty_dict(extra_header)
         extra_param = none_to_empty_dict(extra_param)
@@ -779,9 +779,9 @@ class Api:  # pylint: disable=too-many-public-methods
         url_path = "/uapi/domestic-stock/v1/trading/order-cash"
 
         if buy:
-            tr_id = "TTTC0802U"  # buy
+            tr_id = "TTTC0012U"  # buy
         else:
-            tr_id = "TTTC0801U"  # sell
+            tr_id = "TTTC0011U"  # sell
 
         params = {
             "CANO": self.account.account_code,
@@ -894,7 +894,7 @@ class Api:  # pylint: disable=too-many-public-methods
         return: 서버 response
         """
         url_path = "/uapi/domestic-stock/v1/trading/order-rvsecncl"
-        tr_id = "TTTC0803U"
+        tr_id = "TTTC0013U"
 
         order_dv: str = "00"  # order_dv: 주문유형(00-지정가)
         cancel_dv: str = "02" if is_cancel else "01"

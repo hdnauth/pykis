@@ -28,7 +28,7 @@ def get_order_tr_id_from_market_code(market_code: str, is_buy: bool) -> str:
     """
     market_code = market_code.upper()
     if market_code in ["NASD", "NAS", "NYSE", "AMEX", "AMS"]:
-        return "JTTT1002U" if is_buy else "JTTT1006U"
+        return "TTTT1002U" if is_buy else "TTTT1006U"
     if market_code in ["SEHK", "HKS"]:
         return "TTTS1002U" if is_buy else "TTTS1001U"
     if market_code in ["SZAA", "SZS"]:  # 심천
